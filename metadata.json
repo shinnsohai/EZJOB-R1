@@ -1,0 +1,5 @@
+{
+  "name": "EZJOB AI-Powered Job Board",
+  "description": "An MVP of a job board application that leverages AI to connect skilled workers with employers. Workers can create profiles, and employers can post jobs and find talent.",
+  "requestFramePermissions": []
+}
