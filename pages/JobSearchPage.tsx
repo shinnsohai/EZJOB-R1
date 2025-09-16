@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import type { Job } from '../types';
-import { generateJobs } from '../services/geminiService';
+import { getJobs } from '../services/dataService';
 import Spinner from '../components/Spinner';
 
 const JobCard: React.FC<{ job: Job, onApply: () => void }> = ({ job, onApply }) => (
@@ -47,7 +47,7 @@ const JobSearchPage: React.FC = () => {
 
     const fetchJobs = useCallback(async (query: string) => {
         setIsLoading(true);
-        const fetchedJobs = await generateJobs(query);
+        const fetchedJobs = await getJobs(query);
         // Ensure only active jobs are shown to applicants
         setJobs(fetchedJobs.filter(job => job.status === 'Active'));
         setIsLoading(false);
@@ -95,7 +95,7 @@ const JobSearchPage: React.FC = () => {
             {isLoading ? (
                 <div className="text-center py-10">
                     <Spinner size="lg" />
-                    <p className="mt-4 text-gray-600">Our AI is finding the best jobs for you...</p>
+                    <p className="mt-4 text-gray-600">Loading available jobs...</p>
                 </div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">

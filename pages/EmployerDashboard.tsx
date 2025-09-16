@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { Job, WorkerProfile } from '../types';
-import { generateJobWithAI, generateApplicants, searchWorkers } from '../services/geminiService';
+import { createJob, getEmployerJobs, updateJobStatus, deleteJob, getWorkerProfiles } from '../services/dataService';
+import { useAuth } from '../App';
 import Spinner from '../components/Spinner';
 import { countries, Country } from '../data/countries';
 
@@ -8,6 +9,7 @@ type View = 'DASHBOARD' | 'NEW_JOB' | 'APPLICANTS' | 'SEARCH_WORKERS';
 type JobStatus = 'Active' | 'On Hold' | 'Closed';
 
 const EmployerDashboard: React.FC = () => {
+    const { user } = useAuth();
     const [view, setView] = useState<View>('DASHBOARD');
     const [jobs, setJobs] = useState<Job[]>([]);
     const [workers, setWorkers] = useState<WorkerProfile[]>([]);
@@ -16,6 +18,21 @@ const EmployerDashboard: React.FC = () => {
     const [selectedWorkers, setSelectedWorkers] = useState<Set<string>>(new Set());
     const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
     
+    // Load employer's jobs on component mount
+    useEffect(() => {
+        if (user?.id) {
+            loadEmployerJobs();
+        }
+    }, [user?.id]);
+
+    const loadEmployerJobs = async () => {
+        if (!user?.id) return;
+        setIsLoading(true);
+        const employerJobs = await getEmployerJobs(user.id);
+        setJobs(employerJobs);
+        setIsLoading(false);
+    };
+
     // Country Dropdown State
     const [country, setCountry] = useState('United States');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -36,6 +53,8 @@ const EmployerDashboard: React.FC = () => {
 
     const handleCreateJob = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!user?.id) return;
+        
         setIsLoading(true);
         const formData = new FormData(e.currentTarget);
         const title = formData.get('title') as string;
@@ -44,22 +63,23 @@ const EmployerDashboard: React.FC = () => {
         const salary_min = parseInt(formData.get('salary_min') as string, 10);
         const salary_max = parseInt(formData.get('salary_max') as string, 10);
 
-        const aiDetails = await generateJobWithAI(title, company);
-
-        const newJob: Job = {
-            id: crypto.randomUUID(),
-            employer_id: 'mock-employer-id', // from auth context in a real app
+        const jobData: Omit<Job, 'id'> = {
+            employer_id: user.id,
             employer_name: company,
             title,
-            description: aiDetails.description || 'AI generation failed.',
-            required_skills: aiDetails.required_skills || [],
+            description: `We are looking for a skilled ${title} to join our team at ${company}. This is an excellent opportunity for an experienced professional.`,
+            required_skills: [title.toLowerCase(), 'experience', 'professional'],
             status: 'Active',
             location,
             country,
             salary_min,
             salary_max
         };
-        setJobs(prev => [...prev, newJob]);
+        
+        const newJob = await createJob(jobData);
+        if (newJob) {
+            setJobs(prev => [...prev, newJob]);
+        }
         setIsLoading(false);
         setView('DASHBOARD');
     };
@@ -69,7 +89,7 @@ const EmployerDashboard: React.FC = () => {
         setView('APPLICANTS');
         setSelectedJob(job);
         setSelectedApplicants(new Set());
-        const fetchedApplicants = await generateApplicants(job.title, job.country);
+        const fetchedApplicants = await getWorkerProfiles(job.title, job.country);
         setWorkers(fetchedApplicants);
         setIsLoading(false);
     }, []);
@@ -79,22 +99,28 @@ const EmployerDashboard: React.FC = () => {
         setView('SEARCH_WORKERS');
         setSelectedJob(job);
         setSelectedWorkers(new Set()); // Reset selection
-        const rankedWorkers = await searchWorkers(job.title, job.country);
+        const rankedWorkers = await getWorkerProfiles(job.title, job.country);
         setWorkers(rankedWorkers);
         setIsLoading(false);
     }, []);
 
-    const handleStatusChange = (jobId: string, newStatus: JobStatus) => {
-        setJobs(prevJobs =>
-            prevJobs.map(job =>
-                job.id === jobId ? { ...job, status: newStatus } : job
-            )
-        );
+    const handleStatusChange = async (jobId: string, newStatus: JobStatus) => {
+        const success = await updateJobStatus(jobId, newStatus);
+        if (success) {
+            setJobs(prevJobs =>
+                prevJobs.map(job =>
+                    job.id === jobId ? { ...job, status: newStatus } : job
+                )
+            );
+        }
     };
 
-    const handleDeleteJob = (jobId: string) => {
+    const handleDeleteJob = async (jobId: string) => {
         if (window.confirm('Are you sure you want to permanently delete this job posting? This action cannot be undone.')) {
-            setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
+            const success = await deleteJob(jobId);
+            if (success) {
+                setJobs(prevJobs => prevJobs.filter(job => job.id !== jobId));
+            }
         }
     };
 
@@ -248,9 +274,10 @@ const EmployerDashboard: React.FC = () => {
                                     </div>
                                 </div>
                                 <p className="text-sm text-gray-500">Our AI will generate a detailed description and required skills based on your job title.</p>
+                                <p className="text-sm text-gray-500">You can edit the job details after creation.</p>
                                 <div className="flex justify-end">
                                     <button type="submit" disabled={isLoading} className="w-full sm:w-auto bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700 transition-colors disabled:bg-indigo-300">
-                                        {isLoading ? <Spinner size="sm" /> : 'Create Job with AI'}
+                                        {isLoading ? <Spinner size="sm" /> : 'Create Job'}
                                     </button>
                                 </div>
                             </form>
@@ -263,7 +290,7 @@ const EmployerDashboard: React.FC = () => {
                         <button onClick={() => setView('DASHBOARD')} className="mb-6 text-sm font-medium text-indigo-600 hover:text-indigo-500">&larr; Back to Dashboard</button>
                         <h2 className="text-2xl font-bold text-gray-900 mb-4">Applicants for {selectedJob?.title}</h2>
                         {isLoading ? (
-                            <div className="text-center py-10"><Spinner size="lg" /><p className="mt-2 text-gray-500">Finding applicants...</p></div>
+                            <div className="text-center py-10"><Spinner size="lg" /><p className="mt-2 text-gray-500">Loading applicants...</p></div>
                         ) : (
                             <div>
                                 <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm mb-4">
@@ -340,7 +367,7 @@ const EmployerDashboard: React.FC = () => {
                         <p className="text-gray-600 mb-4">AI-powered search for: <span className="font-semibold">{selectedJob?.title}</span></p>
 
                          {isLoading ? (
-                            <div className="text-center py-10"><Spinner size="lg" /><p className="mt-2 text-gray-500">Our AI is searching and ranking candidates...</p></div>
+                            <div className="text-center py-10"><Spinner size="lg" /><p className="mt-2 text-gray-500">Searching for workers...</p></div>
                         ) : (
                             <div>
                                 <div className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm mb-4">

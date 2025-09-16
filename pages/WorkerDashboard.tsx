@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import type { WorkerProfile } from '../types';
 import { useAuth } from '../App';
+import { createWorkerProfile, updateWorkerProfile } from '../services/dataService';
 import { countries } from '../data/countries';
 
 const WorkerDashboard: React.FC = () => {
@@ -11,19 +12,36 @@ const WorkerDashboard: React.FC = () => {
 
     const handleSaveProfile = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        if (!user) return;
+        
         const formData = new FormData(e.currentTarget);
-        // FIX: Add missing properties to satisfy the WorkerProfile type.
-        const newProfile: WorkerProfile = {
-            id: profile?.id || crypto.randomUUID(),
+        
+        const profileData = {
             user_id: user!.id,
             full_name: formData.get('full_name') as string,
             trade_or_skill: formData.get('trade_or_skill') as string,
             experience_years: parseInt(formData.get('experience_years') as string, 10),
-            summary: "Experienced professional with a proven track record.", // Placeholder
+            summary: `Experienced ${formData.get('trade_or_skill')} with ${formData.get('experience_years')} years of professional experience.`,
             country_of_origin: formData.get('country_of_origin') as string,
             experience_in_country: parseInt(formData.get('experience_in_country') as string, 10),
         };
-        setProfile(newProfile);
+        
+        if (profile) {
+            // Update existing profile
+            updateWorkerProfile(profile.id, profileData).then((updatedProfile) => {
+                if (updatedProfile) {
+                    setProfile(updatedProfile);
+                }
+            });
+        } else {
+            // Create new profile
+            createWorkerProfile(profileData).then((newProfile) => {
+                if (newProfile) {
+                    setProfile(newProfile);
+                }
+            });
+        }
+        
         setIsEditing(false);
     };
 
