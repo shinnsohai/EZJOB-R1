@@ -11,7 +11,7 @@ export interface User {
 
 export interface AuthContextType {
     user: User | null;
-    login: (identifier: string, role: UserRole) => void;
+    login: (authUser: import('./services/authService').AuthUser) => void;
     logout: () => void;
 }
 

@@ -4,6 +4,8 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
 import { UserRole } from '../types';
 import { countries, Country } from '../data/countries';
+import { authService } from '../services/authService';
+import Spinner from '../components/Spinner';
 
 
 interface AuthPageProps {
@@ -18,6 +20,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
     const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
     const [role, setRole] = useState<UserRole>(UserRole.WORKER);
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -53,9 +56,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
         ? "Join EZJOB to find your next opportunity or hire the best talent."
         : "Log in to access your dashboard.";
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsLoading(true);
 
         let loginIdentifier = '';
         let isValid = true;
@@ -79,21 +83,46 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
             isValid = false;
         }
 
-        if (!isValid) return;
-
-        // Mock authentication
-        // In a real app, you would have logic to determine role on login
-        // For simplicity, we assume WORKER on login if role is not otherwise known.
-        let userRole = role;
-        if (!isRegister) {
-             userRole = email.startsWith('employer') || phone.startsWith('1') ? UserRole.EMPLOYER : UserRole.WORKER;
+        if (!isValid) {
+            setIsLoading(false);
+            return;
         }
 
+        try {
+            let result;
+            
+            if (isRegister) {
+                // Registration
+                if (authMethod === 'email') {
+                    result = await authService.signUpWithEmail(email, password, role);
+                } else {
+                    result = await authService.signUpWithPhone(`${countryCode}${phone}`, password, role);
+                }
+            } else {
+                // Login
+                if (authMethod === 'email') {
+                    result = await authService.signInWithEmail(email, password);
+                } else {
+                    result = await authService.signInWithPhone(`${countryCode}${phone}`, password);
+                }
+            }
 
-        login(loginIdentifier, userRole);
-        
-        const destination = userRole === UserRole.WORKER ? '/worker/dashboard' : '/employer/dashboard';
-        navigate(destination);
+            if (result.error) {
+                setError(result.error);
+                setIsLoading(false);
+                return;
+            }
+
+            if (result.user) {
+                login(result.user);
+                const destination = result.user.role === UserRole.WORKER ? '/worker/dashboard' : '/employer/dashboard';
+                navigate(destination);
+            }
+        } catch (error) {
+            setError('An unexpected error occurred. Please try again.');
+        }
+
+        setIsLoading(false);
     };
     
     const AuthMethodToggle = () => (
@@ -230,9 +259,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ mode }) => {
                         <div>
                             <button
                                 type="submit"
+                                disabled={isLoading}
                                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                             >
-                                {isRegister ? 'Sign Up' : 'Sign In'}
+                                {isLoading ? <Spinner size="sm" /> : (isRegister ? 'Sign Up' : 'Sign In')}
                             </button>
                         </div>
                     </form>

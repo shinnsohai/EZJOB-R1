@@ -3,12 +3,14 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import { UserRole } from '../types';
+import { authService } from '../services/authService';
 
 const Header: React.FC = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        await authService.signOut();
         logout();
         navigate('/');
     };

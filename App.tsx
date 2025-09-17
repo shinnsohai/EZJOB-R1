@@ -3,6 +3,7 @@ import React, { useState, createContext, useContext, useMemo, useCallback } from
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import type { User, AuthContextType } from './types';
 import { UserRole } from './types';
+import { authService, type AuthUser } from './services/authService';
 import Header from './components/Header';
 import HomePage from './pages/HomePage';
 import AuthPage from './pages/AuthPage';
@@ -23,13 +24,13 @@ export const useAuth = () => {
 const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
 
-    const login = useCallback((identifier: string, role: UserRole) => {
-        const mockUser: User = {
-            id: crypto.randomUUID(),
-            identifier, // Can be email or phone
-            role,
+    const login = useCallback((authUser: AuthUser) => {
+        const user: User = {
+            id: authUser.id,
+            identifier: authUser.email || authUser.phone || '',
+            role: authUser.role,
         };
-        setUser(mockUser);
+        setUser(user);
     }, []);
 
     const logout = useCallback(() => {
